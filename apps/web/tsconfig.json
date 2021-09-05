@@ -1,17 +1,25 @@
 {
   "compilerOptions": {
-    "module": "esNext",
-    "target": "es5",
-    "moduleResolution": "node",
+    "target": "es6",
+    "module": "CommonJS",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "declaration": true,
     "strict": true,
-    "noImplicitAny": true,
-    "noImplicitReturns": true,
-    "noImplicitThis": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
+    "noResolve": false,
+    "noImplicitAny": false,
     "preserveConstEnums": true,
-    "sourceMap": true,
-    "rootDir": "src"
-  }
+    "lib": [
+      "dom",
+      "es6"
+    ]
+  },
+  "exclude": [
+    "node_modules",
+    "src/__tests__",
+    "dist"
+  ]
 }
