@@ -1,34 +1,33 @@
-import { Engine } from "@babylonjs/core/Engines/engine";
-import { getSceneModuleWithName } from "./createScene";
+import { Scene, Engine, ArcRotateCamera, Vector3, Mesh, SceneLoader } from "@babylonjs/core";
 
-const getModuleToLoad = (): string | undefined => location.search.split('scene=')[1];
+// new Scene()
+const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
+const engine = new Engine(
+    canvas,
+    true,
+    {
+        preserveDrawingBuffer: true,
+        stencil: true,
+        disableWebGL2Support: false
+    }
+);
 
-export const babylonInit = async (): Promise<void>  => {
-    // get the module to load
-    const moduleName = getModuleToLoad();
-    const createSceneModule = await getSceneModuleWithName(moduleName);
+const scene = new Scene(engine);
 
-    // Execute the pretasks, if defined
-    await Promise.all(createSceneModule.preTasks || []);
-    // Get the canvas element
-    const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement; 
-    // Generate the BABYLON 3D engine
-    const engine = new Engine(canvas, true); 
+const camera = new ArcRotateCamera("camera", 1, 1, 1, new Vector3(0, 0, 0), scene, true);
 
-    // Create the scene
-    const scene = await createSceneModule.createScene(engine, canvas);
+scene.addCamera(camera);
+SceneLoader.ImportMesh("", "/assets/", "table-tennis-table.glb", scene,
+    () => { console.log("Success loading"); },
+    (ev) => { console.log("Loading..."); },
+    (sc, msg, er) => console.log("Error loading", { sc, msg, er }),
+);
 
-    // Register a render loop to repeatedly render the scene
-    engine.runRenderLoop(function () {
-        scene.render();
-    });
-
-    // Watch for browser/canvas resize events
-    window.addEventListener("resize", function () {
-        engine.resize();
-    });
-}
-
-babylonInit().then(() => {
-    // scene started rendering, everything is initialized
+window.addEventListener("resize", function () {
+    engine.resize();
 });
+
+engine.runRenderLoop(() => {
+    scene.render();
+});
+
