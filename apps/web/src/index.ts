@@ -1,4 +1,4 @@
-import { Scene, Engine, ArcRotateCamera, Vector3, SceneLoader } from "@babylonjs/core";
+import { Scene, Engine, ArcRotateCamera, Vector3, SceneLoader } from "babylonjs";
 
 const canvas = document.getElementById("renderCanvas") as HTMLCanvasElement;
 const engine = new Engine(
