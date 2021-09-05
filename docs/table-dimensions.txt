@@ -1,0 +1,19 @@
+Tafelblad
+- Breedte: 152,5 cm (X)
+	- Halfsize: 76.25cm
+- Diepte: 274 cm (Y)
+	(ik wil de tafel splitsen: 137cm)
+
+- Hoogte: 8cm
+- Top van de grond: 76cm
+- Onderkant van de grond: 68cm
+- Midden van de grond: 72cm
+
+Net:
+- Hoogte: 15,25cm 
+- Breedte: 183cm (tafelblad + 2x de hoogte)
+
+Strepen:
+- Rand: 2cm
+76.25cm - 74.25cm
+- Midden: 0.3 cm
