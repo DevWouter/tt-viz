@@ -76,8 +76,21 @@ class App {
       Timeline.setTime(0);
     });
 
+    var _lastFrame = performance.now();
+    var _speed = 1;
+    var _ms = 0;
     // run the main render loop
     engine.runRenderLoop(() => {
+
+      const currentFrame = performance.now();
+      const realMs = currentFrame - _lastFrame;
+      const simMs = _speed * realMs;
+      _ms = (_ms + simMs);
+
+      _lastFrame = currentFrame;
+
+      Timeline.setTime(_ms);
+
       scene.render();
     });
   }

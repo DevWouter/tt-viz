@@ -14,47 +14,37 @@ interface TimelineState {
    * 1.000 = 1 second
    * 22.45 = 22 seconds and 450 ms.
    */
-  seconds: number;
+  ms: number;
 }
 
 interface ITimeline {
   get state$(): Observable<TimelineState>;
   play();
   pause();
-  setTime(seconds: number);
+  setTime(ms: number);
 }
 
 class TimelineImpl implements ITimeline {
 
   private readonly _speed: BehaviorSubject<number>;
-  private readonly _seconds: BehaviorSubject<number>;
+  private readonly _ms: BehaviorSubject<number>;
 
   get state$(): Observable<TimelineState> {
     return combineLatest([
       this._speed,
-      this._seconds,
+      this._ms,
     ]).pipe(map(([
       speed,
-      seconds
+      ms
     ]) => ({
       speed,
-      seconds
+      ms
     })));
   }
 
   constructor() {
-    this._speed = new BehaviorSubject(0);
-    this._seconds = new BehaviorSubject(0);
-    var _lastFrame = performance.now();
-
-    setInterval(() => {
-      const currentFrame = performance.now();
-      const realMs =  currentFrame - _lastFrame;
-      const simMs = this._speed.getValue() * realMs;
-      this._seconds.next(this._seconds.getValue() + simMs);
-
-      _lastFrame = currentFrame;
-    });
+    this._speed = new BehaviorSubject(1);
+    this._ms = new BehaviorSubject(0);
   }
 
   play() {
@@ -66,7 +56,7 @@ class TimelineImpl implements ITimeline {
   }
 
   setTime(seconds: number) {
-    this._seconds.next(seconds);
+    this._ms.next(seconds);
   }
 }
 

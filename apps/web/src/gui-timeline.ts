@@ -8,6 +8,7 @@ import {
   Line,
 } from "@babylonjs/gui";
 import { distinctUntilChanged, map, take, timestamp } from "rxjs";
+import { GuiTimebar } from "./gui/timebar";
 import { Timeline } from "./state/timeline";
 
 export class GuiTimeline {
@@ -59,30 +60,14 @@ export class GuiTimeline {
     stack_v.addControl(stack_buttons);
     stack_v.addControl(container_timebar);
 
-    Timeline.state$.pipe(
-      map(x => x.seconds),
-      take(5),
-      // distinctUntilChanged(),
-    ).subscribe(() => {
-      container_timebar.clearControls();
-      for (var px = 0; px < container_timebar.widthInPixels; px += this._timeResolution) {
-        const line = new Line(`line_` + px);
-        line.x1 = px;
-        line.x2 = px;
-        line.y1 = 2;
-        line.y2 = container_timebar.heightInPixels - 4;
-        line.color = "red";
-        container_timebar.addControl(line);
+    var timebar = new GuiTimebar(container_timebar);
 
-        const timeSeconds = new TextBlock("text_" + px, `${(px / 1000)}`);
-        timeSeconds.left = px;
-        timeSeconds.widthInPixels = this._timeResolution;
-        timeSeconds.heightInPixels = container_timebar.heightInPixels / 2;
-        timeSeconds.color = "red";
-        timeSeconds.textHorizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_LEFT;
-        timeSeconds.horizontalAlignment = TextBlock.HORIZONTAL_ALIGNMENT_LEFT;
-        container_timebar.addControl(timeSeconds);
-      }
+    Timeline.state$.pipe(
+      map(x => x.ms),
+      // distinctUntilChanged(),
+    ).subscribe(x => {
+      timebar.setTime(x);
+      timebar.update(x);
     });
 
     gui.addControl(stack_v);
