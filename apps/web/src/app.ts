@@ -3,7 +3,6 @@ import "@babylonjs/inspector";
 import "@babylonjs/loaders/glTF";
 
 import { AdvancedDynamicTexture, Button } from "@babylonjs/gui";
-import { Timeline } from "./state/timeline";
 
 import {
   Scene,
@@ -16,7 +15,6 @@ import {
   ShadowGenerator,
   SpotLight
 } from "@babylonjs/core";
-import { GuiTimeline } from "./gui-timeline";
 
 class App {
   constructor() {
@@ -38,7 +36,6 @@ class App {
     var light1: HemisphericLight = new HemisphericLight("light1", new Vector3(1, 1, 0), scene);
 
     var gui = AdvancedDynamicTexture.CreateFullscreenUI("GUI", true, scene);
-    var guiTimeline = new GuiTimeline(gui);
 
     var shadowGenerator = new ShadowGenerator(1024, light2);
     shadowGenerator.filter = ShadowGenerator.FILTER_PCSS;
@@ -73,23 +70,16 @@ class App {
     // Resize the render screen when the window resizes.
     window.addEventListener("resize", function () {
       engine.resize();
-      Timeline.setTime(0);
     });
 
     var _lastFrame = performance.now();
-    var _speed = 1;
-    var _ms = 0;
+    var deltaTimeMs = 0;
     // run the main render loop
     engine.runRenderLoop(() => {
 
       const currentFrame = performance.now();
-      const realMs = currentFrame - _lastFrame;
-      const simMs = _speed * realMs;
-      _ms = (_ms + simMs);
-
+      deltaTimeMs = currentFrame - _lastFrame;
       _lastFrame = currentFrame;
-
-      Timeline.setTime(_ms);
 
       scene.render();
     });
