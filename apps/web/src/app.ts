@@ -41,14 +41,13 @@ interface CameraView {
 }
 
 const cameraTarget = new Vector3(0, 0.76, 0);
-// const cameraTarget = new Vector3(0, 0, 0);
 const CAM_ROT_STEP = 12.5;
 
 
 interface InputTrigger {
-  shiftKey: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
+  shiftKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
   key: string; // Single character uppercase
   action(): void;
 }
@@ -81,92 +80,69 @@ class App {
 
     var inputs: InputTrigger[] = [];
     inputs.push({
+      key: "D",
       action: () => {
         this._scene.debugLayer.isVisible() ? this._scene.debugLayer.hide() : this._scene.debugLayer.show();
       },
-      altKey: true,
-      ctrlKey: false,
-      shiftKey: true,
-      key: "I"
     });
 
     inputs.push({
+      key: "I",
       action: () => {
-        // Next camera
         this._cameraView.distance = Math.max(this._cameraView.distance - 0.1, 0.8);
         this.updateCameraPos();
-      },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "I"
+      }
     });
 
     inputs.push({
+      key: "K",
       action: () => {
-        // Next camera
         this._cameraView.distance = Math.min(this._cameraView.distance + 0.1, 10);
         this.updateCameraPos();
-      },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "K"
+      }
     });
 
     inputs.push({
+      key: "H",
       action: () => {
-        // Next camera
         this._cameraView.height = Math.max(this._cameraView.height - 0.1, 0.8);
         this.updateCameraPos();
-      },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "H"
+      }
     });
 
     inputs.push({
+      key: "Y",
       action: () => {
-        // Next camera
         this._cameraView.height = Math.min(this._cameraView.height + 0.1, 10);
         this.updateCameraPos();
       },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "Y"
     });
 
     inputs.push({
+      key: "J",
       action: () => {
-        // Next camera
         this._cameraView.rotation = (this._cameraView.rotation + CAM_ROT_STEP) % 360;
         this.updateCameraPos();
       },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "J"
     });
 
     inputs.push({
+      key: "L",
       action: () => {
-        // Prev camera
         this._cameraView.rotation = (this._cameraView.rotation + (360 - CAM_ROT_STEP)) % 360;
         this.updateCameraPos();
       },
-      altKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      key: "L"
     });
 
 
     window.addEventListener("resize", () => { this._engine.resize(); });
-    // Toggle debug scene when the user presses Shift+Alt+I
     window.addEventListener("keydown", (ev) => {
-      var validInputs = inputs.filter(x => x.altKey == ev.altKey && x.ctrlKey == ev.ctrlKey && x.shiftKey == ev.shiftKey && x.key.toUpperCase() == ev.key.toUpperCase());
+      var validInputs = inputs.filter(x =>
+        (x.altKey ?? false) == ev.altKey &&
+        (x.ctrlKey ?? false) == ev.ctrlKey &&
+        (x.shiftKey ?? false) == ev.shiftKey &&
+        x.key.toUpperCase() == ev.key.toUpperCase()
+      );
       if (validInputs.length === 0) return;
       validInputs[0].action();
     });
@@ -175,7 +151,7 @@ class App {
     this._scene.onPointerObservable.add((evData) => {
       this._scene.meshes.forEach(x => x.renderOutline = false);
       if (evData.pickInfo) {
-        var pickingInfo = this._scene.pickWithRay(evData.pickInfo.ray!, m=> m.name.startsWith("[ball-node]"))
+        var pickingInfo = this._scene.pickWithRay(evData.pickInfo.ray!, m => m.name.startsWith("[ball-node]"))
         if (pickingInfo?.pickedMesh) {
           pickingInfo.pickedMesh.renderOutline = true;
         }
