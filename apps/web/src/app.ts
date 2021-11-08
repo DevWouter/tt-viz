@@ -7,10 +7,8 @@ import {
   Engine,
   Vector3,
   SceneLoader,
-  HemisphericLight,
   Mesh,
   ShadowGenerator,
-  SpotLight,
   PointerEventTypes,
   StandardMaterial,
   Color3,
@@ -18,6 +16,9 @@ import {
   UniversalCamera,
   MeshBuilder,
   Matrix,
+  CascadedShadowGenerator,
+  DirectionalLight,
+  PBRMaterial,
 } from "@babylonjs/core";
 import { Graph, PathNode } from "./Graph";
 
@@ -62,7 +63,8 @@ class App {
     rotation: 0,
     distance: 3,
     height: 6,
-  }
+  };
+  private _ballMaterial!: PBRMaterial;
 
   constructor() {
     // create the canvas html element and attach it to the webpage
@@ -73,10 +75,29 @@ class App {
     document.body.appendChild(canvas);
 
     // initialize babylon scene and engine
-    this._engine = new Engine(canvas, true);
-    this._engine.runRenderLoop(() => { this._scene.render(); });
+    this._engine = new Engine(canvas, true, {
+      antialias: true,
+      useHighPrecisionFloats: true
+    });
+    
+    let firstFrame = true;
+    this._engine.runRenderLoop(() => {
+      if (firstFrame) {
+        this._engine.resize();
+        firstFrame = false;
+      }
+      this._scene.render();
+    });
 
     this._scene = new Scene(this._engine);
+
+    // Generate ball material
+    this._ballMaterial = new PBRMaterial("ball", this._scene);
+    this._ballMaterial.albedoColor = Color3.FromHexString("#FFFEFE");
+    this._ballMaterial.emissiveColor = Color3.FromHexString('#2B2B2B');
+    this._ballMaterial.metallic = 0;
+    this._ballMaterial.roughness = 0.3;
+
 
     var inputs: InputTrigger[] = [];
     inputs.push({
@@ -195,6 +216,8 @@ class App {
     // Add the mesh
     var mesh = Mesh.CreateSphere("[ball-node]", 32, 0.04, this._scene);
     mesh.position = position;
+    mesh.material = this._ballMaterial;
+
     this._shadowGenerator.addShadowCaster(mesh);
     var dragBehaviour = new PointerDragBehavior({ dragPlaneNormal: Vector3.Up() });
     dragBehaviour.onDragObservable.add(ev => {
@@ -216,7 +239,7 @@ class App {
     var existingEdges = this._scene.meshes.filter(x => x.name.startsWith("[ball-edge]"));
 
     existingEdges.forEach(x => {
-      this._scene.removeMesh(x);
+      x.dispose();
     });
 
     this._graph.edges.forEach(edge => {
@@ -225,7 +248,9 @@ class App {
 
       path.push(edge.from.position);
       for (var i = 0; i < 30; ++i) {
+        var distanceMidpoint = Math.abs(i - 16) / 16;
         const pos = Vector3.Lerp(edge.from.position, edge.to.position, (1 / 30) * i);
+        pos.y += 0.2 * (1 - distanceMidpoint); // Rise and lower the center.
         path.push(pos);
       }
       path.push(edge.to.position);
@@ -237,6 +262,8 @@ class App {
           return 0.01 * (1 - x);
         },
       }, this._scene);
+
+      this._shadowGenerator.addShadowCaster(mesh);
     });
 
   }
@@ -244,29 +271,40 @@ class App {
   loadScene() {
     // Setup camera
     this._camera = new UniversalCamera("Camera", new Vector3(0, 8, 2), this._scene);
+    this._camera.minZ = 0.001;
+    this._camera.maxZ = 40;
     this._camera.setTarget(cameraTarget);
 
     this.updateCameraPos();
 
     // Setup lights and shadows
-    var spot_pos = new Vector3(2, 10, 2);
-    var spot_dir = (spot_pos.subtract(new Vector3(1, 0, 1))).negate().normalize();
-    var light2 = new SpotLight("spotlight", new Vector3(2, 10, 2), spot_dir, Math.PI / 3, 0.0001, this._scene);
-    // light2.intensity = 0.5;
-    var light1: HemisphericLight = new HemisphericLight("light1", Vector3.Up(), this._scene);
-    light1.intensity = 0.5;
+    var light2 = new DirectionalLight("Light", Vector3.Down(), this._scene);
+    light2.intensity = 3;
 
-    this._shadowGenerator = new ShadowGenerator(1024, light2, true);
-    this._shadowGenerator.filter = ShadowGenerator.FILTER_PCF;
+    const xyz = new CascadedShadowGenerator(1024, light2, true);
+    xyz.autoCalcDepthBounds = true;
+    xyz.autoCalcDepthBoundsRefreshRate = 1;
+    xyz.shadowMaxZ = 10; // Really small Z range since table tennis is about small objects.
+    xyz.contactHardeningLightSizeUVRatio = 0.006; // Use hard shadows since we only have a single light.
+    xyz.lambda = 0.67; // Prefer closer shadowmap 
+    xyz.penumbraDarkness = 0.5; // Make shadows of the penumbra harder
+    this._shadowGenerator = xyz;
+    this._shadowGenerator.filter = ShadowGenerator.FILTER_PCSS;
     this._shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-
+    
     // Load level 
     SceneLoader.ImportMesh("", "/models/", "table-tennis-table.glb", this._scene,
       (meshes, _ps, _sk, _ag, tn) => {
         tn.find(x => x.name.toLowerCase() == "sun")?.dispose();
         tn.find(x => x.name.toLowerCase() == "camera")?.dispose();
         meshes.forEach(m => this._shadowGenerator.addShadowCaster(m));
-        // meshes.forEach(m => m.receiveShadows = true);
+        meshes.forEach(m => {
+          try {
+            m.receiveShadows = true;
+            console.log("Set receiveShadows to true on " + m.name);
+          }
+          catch (ex) { console.error("Failed to set receiveShadows on " + m.name, ex); }
+        });
       },
       () => { },
       (sc, msg, er) => console.log("Error loading", { sc, msg, er }),
