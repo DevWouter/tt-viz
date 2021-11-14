@@ -21,9 +21,15 @@ import {
   PBRMaterial,
   AbstractMesh,
   ShadowLight,
+  GizmoManager,
+  Tags,
+  Ray,
 } from "@babylonjs/core";
 import { Graph, PathNode } from "./Graph";
 
+/**
+ * Meshes on which we can place a new ball.
+ */
 var hitableMeshNames: string[] = [
   "Side A_primitive0", // Table (without lines)
   "Side A_primitive1", // Table (lines-only)
@@ -69,6 +75,8 @@ class App {
 
   private _shadowLights: ShadowLight[] = [];
   private _shadowGenerators: ShadowGenerator[] = [];
+  private _gizmoManager: GizmoManager;
+  private _tableMesh!: AbstractMesh;
 
   constructor() {
     // create the canvas html element and attach it to the webpage
@@ -80,9 +88,10 @@ class App {
 
     // initialize babylon scene and engine
     this._engine = new Engine(canvas, true, {
-      antialias: true,
-      useHighPrecisionFloats: true
+      // antialias: true,
+      // useHighPrecisionFloats: true
     });
+
 
     let firstFrame = true;
     this._engine.runRenderLoop(() => {
@@ -95,12 +104,47 @@ class App {
 
     this._scene = new Scene(this._engine);
 
+    this._gizmoManager = new GizmoManager(this._scene);
+    this._gizmoManager.positionGizmoEnabled = true;
+    this._gizmoManager.scaleGizmoEnabled = false;
+    this._gizmoManager.rotationGizmoEnabled = false;
+    this._gizmoManager.boundingBoxGizmoEnabled = false;
+    this._gizmoManager.attachableMeshes = [];
+    // this._gizmoManager.usePointerToAttachGizmos = false;
+
+    this._gizmoManager.gizmos.positionGizmo!.snapDistance = 0.01;
+    this._gizmoManager.gizmos.positionGizmo?.onDragEndObservable.add(() => {
+      // Update all balls so that they are above ground level
+      this._scene.getMeshesByTags("ball").forEach(m => {
+        if (m.position.y < 0) {
+          m.position.y = 0;
+        }
+
+        const downRay = new Ray(new Vector3(m.position.x, 20, m.position.z), Vector3.Down(), undefined);
+        const intersection = this._scene.pickWithRay(downRay, x => !x.name.startsWith("["), false);
+        if (!intersection) return;
+        const deepestPoint = (intersection.pickedPoint?.y ?? 0);
+        console.log({
+          deepestPoint,
+          ballDepth: m.position.y,
+          shouldAdjust: deepestPoint > m.position.y
+        });
+
+        if (deepestPoint > m.position.y) {
+          m.position.y = deepestPoint + 0.02;
+        }
+
+      });
+      this.updatePaths();
+    });
+
     // Generate ball material
     this._ballMaterial = new PBRMaterial("ball", this._scene);
     this._ballMaterial.albedoColor = Color3.FromHexString("#FFFEFE");
     this._ballMaterial.emissiveColor = Color3.FromHexString('#2B2B2B');
     this._ballMaterial.metallic = 0;
     this._ballMaterial.roughness = 0.3;
+    this._ballMaterial.maxSimultaneousLights = 16;
 
 
     var inputs: InputTrigger[] = [];
@@ -174,6 +218,9 @@ class App {
 
 
     this._scene.onPointerObservable.add((evData) => {
+      // if (evData.type == PointerEventTypes.POINTERUP) {
+      //   this._gizmoManager.attachableMeshes.
+      // }
       this._scene.meshes.forEach(x => x.renderOutline = false);
       if (evData.pickInfo) {
         var pickingInfo = this._scene.pickWithRay(evData.pickInfo.ray!, m => m.name.startsWith("[ball-node]"))
@@ -184,12 +231,16 @@ class App {
 
       if (!evData.pickInfo?.hit) return;
       if (evData.type != PointerEventTypes.POINTERTAP) return;
-      if (!hitableMeshNames.includes(evData.pickInfo.pickedMesh!.name)) return;
-
-      var position = evData.pickInfo.pickedPoint!;
-      var offset = evData.pickInfo.getNormal(true, true)!.normalizeToNew();
-      position.addInPlace(offset.scale(0.02));
-      this.addBallPosition(position);
+      const pickedMesh = evData.pickInfo.pickedMesh!;
+      if (hitableMeshNames.includes(pickedMesh.name)) {
+        var position = evData.pickInfo.pickedPoint!;
+        var offset = evData.pickInfo.getNormal(true, true)!.normalizeToNew();
+        position.addInPlace(offset.scale(0.02));
+        this.addBallPosition(position);
+      }
+      // if (pickedMesh.name.startsWith("[ball-node]")) {
+      //   this._gizmoManager.attachToMesh()
+      // }
     });
 
     this.loadScene();
@@ -219,6 +270,7 @@ class App {
 
     // Add the mesh
     var mesh = Mesh.CreateSphere("[ball-node]", 32, 0.04, this._scene);
+    Tags.AddTagsTo(mesh, "ball");
     mesh.position = position;
     mesh.material = this._ballMaterial;
 
@@ -235,6 +287,7 @@ class App {
     });
 
     mesh.addBehavior(dragBehaviour);
+    this._gizmoManager.attachableMeshes!.push(mesh);
     this.onMeshAddedToScene(mesh);
     this.updatePaths();
   }
@@ -250,14 +303,12 @@ class App {
 
       var path: Vector3[] = [];
 
-      path.push(edge.from.position);
-      for (var i = 0; i < 30; ++i) {
-        var distanceMidpoint = Math.abs(i - 16) / 16;
-        const pos = Vector3.Lerp(edge.from.position, edge.to.position, (1 / 30) * i);
-        pos.y += 0.2 * (1 - distanceMidpoint); // Rise and lower the center.
+      for (var i = 0; i <= 32; ++i) {
+        const ratio = i / 32;
+        const pos = Vector3.Lerp(edge.from.position, edge.to.position, ratio);
+        pos.y += 0.2 * Math.sin(ratio * Math.PI); // Rise and lower the center.
         path.push(pos);
       }
-      path.push(edge.to.position);
 
       const mesh = MeshBuilder.CreateTube("[ball-edge]", {
         path,
@@ -265,6 +316,7 @@ class App {
           var x = Math.abs(i - 16) / 16
           return 0.01 * (1 - x);
         },
+        tessellation: 6
       }, this._scene);
 
       this.onMeshAddedToScene(mesh);
@@ -281,16 +333,24 @@ class App {
 
     this.updateCameraPos();
 
+    // Add a floor
+    const ground = Mesh.CreateGround("ground", 20, 20, 1, this._scene);
+    ground.receiveShadows = true;
+    var material = new StandardMaterial("mat_ground", this._scene);
+    material.diffuseColor = new Color3(0.49, 0.25, 0);
+    material.specularColor = new Color3(0.1, 0.1, 0.1);
+    ground.material = material;
+
     // Setup lights and shadows
     var mainLight = new DirectionalLight("Light", Vector3.Down(), this._scene);
-    mainLight.intensity = 3;
+    mainLight.intensity = 1;
 
     const mainShadowGenerator = new CascadedShadowGenerator(1024, mainLight, true);
     mainShadowGenerator.autoCalcDepthBounds = true;
     mainShadowGenerator.autoCalcDepthBoundsRefreshRate = 1;
     mainShadowGenerator.shadowMaxZ = 10; // Really small Z range since table tennis is about small objects.
     mainShadowGenerator.contactHardeningLightSizeUVRatio = 0.006; // Use hard shadows since we only have a single light.
-    mainShadowGenerator.lambda = 0.67; // Prefer closer shadowmap 
+    mainShadowGenerator.lambda = 0.67; // Prefer closer shadowmap
     mainShadowGenerator.penumbraDarkness = 0.5; // Make shadows of the penumbra harder
     mainShadowGenerator.filter = ShadowGenerator.FILTER_PCSS;
     mainShadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
@@ -299,11 +359,11 @@ class App {
 
     // Surround lights
     const surroundRatio = 0.5;
-    const surroundLightsConfig = [
+    const surroundLightsConfig: { name: string, direction: Vector3 }[] = [
       { name: "lightForward", direction: Vector3.Lerp(Vector3.Down(), Vector3.Forward(), surroundRatio) },
-      { name: "lightBackward", direction: Vector3.Lerp(Vector3.Down(), Vector3.Backward(), surroundRatio) },
       { name: "lightLeft", direction: Vector3.Lerp(Vector3.Down(), Vector3.Left(), surroundRatio) },
       { name: "lightRight", direction: Vector3.Lerp(Vector3.Down(), Vector3.Right(), surroundRatio) },
+      { name: "lightBackward", direction: Vector3.Lerp(Vector3.Down(), Vector3.Backward(), surroundRatio) },
     ];
 
     surroundLightsConfig.forEach(config => {
@@ -317,16 +377,24 @@ class App {
       this._shadowGenerators.push(generator);
     });
 
-    // Load level 
+    // Load level
     SceneLoader.ImportMesh("", "/models/", "table-tennis-table.glb", this._scene,
       (meshes, _ps, _sk, _ag, tn) => {
         tn.find(x => x.name.toLowerCase() == "sun")?.dispose();
         tn.find(x => x.name.toLowerCase() == "camera")?.dispose();
         var rootMesh = meshes.find(x => x.name == "__root__");
         if (!rootMesh) throw new Error("No root mesh was found");
+        this._tableMesh = rootMesh;
         this.onMeshAddedToScene(rootMesh);
         meshes.forEach(m => {
           if (m.isAnInstance) return;
+          var mx = (m.material as PBRMaterial);
+          try {
+            mx.maxSimultaneousLights = 16;
+            console.log("Set lights", m.name)
+          } catch {
+            console.warn("Unable to set lights", m.name);
+          }
           m.receiveShadows = true;
         });
       },
@@ -334,13 +402,6 @@ class App {
       (sc, msg, er) => console.log("Error loading", { sc, msg, er }),
     );
 
-    // Add a floor
-    const ground = Mesh.CreateGround("ground", 20, 20, 1, this._scene);
-    ground.receiveShadows = true;
-    var material = new StandardMaterial("mat_ground", this._scene);
-    material.diffuseColor = new Color3(0.49, 0.25, 0);
-    material.specularColor = new Color3(0.1, 0.1, 0.1);
-    ground.material = material;
 
   }
 
