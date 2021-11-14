@@ -19,6 +19,8 @@ import {
   CascadedShadowGenerator,
   DirectionalLight,
   PBRMaterial,
+  AbstractMesh,
+  ShadowLight,
 } from "@babylonjs/core";
 import { Graph, PathNode } from "./Graph";
 
@@ -57,7 +59,6 @@ class App {
   _scene: Scene;
   _engine: Engine;
   _graph: Graph = { nodes: [], edges: [] };
-  private _shadowGenerator!: ShadowGenerator;
   private _camera!: UniversalCamera;
   private _cameraView: CameraView = {
     rotation: 0,
@@ -65,6 +66,9 @@ class App {
     height: 6,
   };
   private _ballMaterial!: PBRMaterial;
+
+  private _shadowLights: ShadowLight[] = [];
+  private _shadowGenerators: ShadowGenerator[] = [];
 
   constructor() {
     // create the canvas html element and attach it to the webpage
@@ -79,7 +83,7 @@ class App {
       antialias: true,
       useHighPrecisionFloats: true
     });
-    
+
     let firstFrame = true;
     this._engine.runRenderLoop(() => {
       if (firstFrame) {
@@ -218,7 +222,6 @@ class App {
     mesh.position = position;
     mesh.material = this._ballMaterial;
 
-    this._shadowGenerator.addShadowCaster(mesh);
     var dragBehaviour = new PointerDragBehavior({ dragPlaneNormal: Vector3.Up() });
     dragBehaviour.onDragObservable.add(ev => {
       pathNode.position = ev.dragPlanePoint;
@@ -232,6 +235,7 @@ class App {
     });
 
     mesh.addBehavior(dragBehaviour);
+    this.onMeshAddedToScene(mesh);
     this.updatePaths();
   }
 
@@ -263,7 +267,7 @@ class App {
         },
       }, this._scene);
 
-      this._shadowGenerator.addShadowCaster(mesh);
+      this.onMeshAddedToScene(mesh);
     });
 
   }
@@ -278,32 +282,52 @@ class App {
     this.updateCameraPos();
 
     // Setup lights and shadows
-    var light2 = new DirectionalLight("Light", Vector3.Down(), this._scene);
-    light2.intensity = 3;
+    var mainLight = new DirectionalLight("Light", Vector3.Down(), this._scene);
+    mainLight.intensity = 3;
 
-    const xyz = new CascadedShadowGenerator(1024, light2, true);
-    xyz.autoCalcDepthBounds = true;
-    xyz.autoCalcDepthBoundsRefreshRate = 1;
-    xyz.shadowMaxZ = 10; // Really small Z range since table tennis is about small objects.
-    xyz.contactHardeningLightSizeUVRatio = 0.006; // Use hard shadows since we only have a single light.
-    xyz.lambda = 0.67; // Prefer closer shadowmap 
-    xyz.penumbraDarkness = 0.5; // Make shadows of the penumbra harder
-    this._shadowGenerator = xyz;
-    this._shadowGenerator.filter = ShadowGenerator.FILTER_PCSS;
-    this._shadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
-    
+    const mainShadowGenerator = new CascadedShadowGenerator(1024, mainLight, true);
+    mainShadowGenerator.autoCalcDepthBounds = true;
+    mainShadowGenerator.autoCalcDepthBoundsRefreshRate = 1;
+    mainShadowGenerator.shadowMaxZ = 10; // Really small Z range since table tennis is about small objects.
+    mainShadowGenerator.contactHardeningLightSizeUVRatio = 0.006; // Use hard shadows since we only have a single light.
+    mainShadowGenerator.lambda = 0.67; // Prefer closer shadowmap 
+    mainShadowGenerator.penumbraDarkness = 0.5; // Make shadows of the penumbra harder
+    mainShadowGenerator.filter = ShadowGenerator.FILTER_PCSS;
+    mainShadowGenerator.filteringQuality = ShadowGenerator.QUALITY_HIGH;
+    this._shadowLights.push(mainLight);
+    this._shadowGenerators.push(mainShadowGenerator);
+
+    // Surround lights
+    const surroundRatio = 0.5;
+    const surroundLightsConfig = [
+      { name: "lightForward", direction: Vector3.Lerp(Vector3.Down(), Vector3.Forward(), surroundRatio) },
+      { name: "lightBackward", direction: Vector3.Lerp(Vector3.Down(), Vector3.Backward(), surroundRatio) },
+      { name: "lightLeft", direction: Vector3.Lerp(Vector3.Down(), Vector3.Left(), surroundRatio) },
+      { name: "lightRight", direction: Vector3.Lerp(Vector3.Down(), Vector3.Right(), surroundRatio) },
+    ];
+
+    surroundLightsConfig.forEach(config => {
+      var light = new DirectionalLight(config.name, config.direction, this._scene);
+      light.intensity = 0.5;
+      this._shadowLights.push(light);
+
+      const generator = new ShadowGenerator(1024, light, false);
+      generator.filter = ShadowGenerator.FILTER_PCSS;
+      generator.filteringQuality = ShadowGenerator.QUALITY_LOW;
+      this._shadowGenerators.push(generator);
+    });
+
     // Load level 
     SceneLoader.ImportMesh("", "/models/", "table-tennis-table.glb", this._scene,
       (meshes, _ps, _sk, _ag, tn) => {
         tn.find(x => x.name.toLowerCase() == "sun")?.dispose();
         tn.find(x => x.name.toLowerCase() == "camera")?.dispose();
-        meshes.forEach(m => this._shadowGenerator.addShadowCaster(m));
+        var rootMesh = meshes.find(x => x.name == "__root__");
+        if (!rootMesh) throw new Error("No root mesh was found");
+        this.onMeshAddedToScene(rootMesh);
         meshes.forEach(m => {
-          try {
-            m.receiveShadows = true;
-            console.log("Set receiveShadows to true on " + m.name);
-          }
-          catch (ex) { console.error("Failed to set receiveShadows on " + m.name, ex); }
+          if (m.isAnInstance) return;
+          m.receiveShadows = true;
         });
       },
       () => { },
@@ -318,6 +342,12 @@ class App {
     material.specularColor = new Color3(0.1, 0.1, 0.1);
     ground.material = material;
 
+  }
+
+  onMeshAddedToScene(mesh: AbstractMesh) {
+    this._shadowGenerators.forEach(shadowGenerator => {
+      shadowGenerator.addShadowCaster(mesh, true);
+    });
   }
 }
 new App();
