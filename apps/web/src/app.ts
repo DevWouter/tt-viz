@@ -20,6 +20,7 @@ import {
   AbstractMesh,
   PointerDragBehavior,
   Path3D,
+  Curve3
 } from "@babylonjs/core";
 
 interface IBallPlacement {
@@ -180,7 +181,6 @@ class App {
             var m = Mesh.CreateLines("", path.getPoints(), scene);
             ballLines.push(m);
           }
-
         }
       }
 
